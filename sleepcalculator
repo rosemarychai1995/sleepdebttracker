@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Sleep Debt Calculator</title>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    max-width: 700px;
+    margin: auto;
+    padding: 20px;
+    background-color: #f9f9f9;
+  }
+
+  h2 {
+    text-align: center;
+    color: #333;
+  }
+
+  input[type="text"], select {
+    padding: 8px;
+    width: 90%;
+    max-width: 300px;
+    margin-top: 5px;
+  }
+
+  button {
+    padding: 10px 20px;
+    margin-top: 15px;
+    background-color: #4CAF50;
+    border: none;
+    color: white;
+    font-size: 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+
+  button:hover {
+    background-color: #45a049;
+  }
+
+  .result {
+    margin-top: 20px;
+    font-weight: bold;
+    text-align: center;
+  }
+
+  .zone-message {
+    margin-top: 15px;
+    padding: 12px;
+    border-radius: 6px;
+    font-weight: bold;
+    text-align: center;
+  }
+
+  .red-zone { background: #f8d7da; color: #842029; }
+  .yellow-zone { background: #fff3cd; color: #664d03; }
+  .green-zone { background: #d1e7dd; color: #0f5132; }
+
+  label {
+    display: inline-block;
+    width: 90px;
+    font-weight: bold;
+  }
+
+  .sleep-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .scale-container {
+    position: relative;
+    flex: 1;
+    height: 10px;
+    background: #ddd;
+    border-radius: 5px;
+    margin: 0 10px;
+  }
+
+  .tracker {
+    position: absolute;
+    top: 50%;
+    left: 0%;
+    transform: translate(-50%, -50%);
+    width: 22px;
+    height: 22px;
+    background: #4CAF50;
+    border-radius: 50%;
+    cursor: grab;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    transition: background-color 0.2s;
+  }
+
+  .tracker:active {
+    background-color: #3e8e41;
+    cursor: grabbing;
+  }
+
+  .sleep-value {
+    min-width: 40px;
+    text-align: right;
+    font-weight: bold;
+  }
+
+  @media (max-width: 600px) {
+    body { padding: 10px; }
+    label { width: 80px; font-size: 14px; }
+    .sleep-row { flex-direction: column; align-items: flex-start; }
+    .scale-container { width: 100%; margin: 8px 0; }
+    .sleep-value { align-self: flex-end; }
+    button { width: 100%; font-size: 15px; }
+  }
+</style>
+</head>
+
+<body>
+
+<h2>Sleep Debt Calculator</h2>
+
+<p><strong>Participant Name:</strong><br>
+<input type="text" id="participant" placeholder="Enter your name" /></p>
+
+<p><strong>Select your age group:</strong><br>
+<select id="ageGroup">
+  <option value="">-- Select Age Group --</option>
+  <option value="child">6 - 13 years old</option>
+  <option value="teen">14 - 17 years old</option>
+  <option value="adult">18 years old and above</option>
+</select></p>
+
+<p><strong>Select the hours you slept each night for the past 7 days:</strong></p>
+
+<div id="sleep-inputs">
+  <div class="sleep-row"><label>Monday:</label><div class="scale-container" data-day="mon"><div class="tracker"></div></div><span class="sleep-value" id="monVal">1</span> hrs</div>
+  <div class="sleep-row"><label>Tuesday:</label><div class="scale-container" data-day="tue"><div class="tracker"></div></div><span class="sleep-value" id="tueVal">1</span> hrs</div>
+  <div class="sleep-row"><label>Wednesday:</label><div class="scale-container" data-day="wed"><div class="tracker"></div></div><span class="sleep-value" id="wedVal">1</span> hrs</div>
+  <div class="sleep-row"><label>Thursday:</label><div class="scale-container" data-day="thu"><div class="tracker"></div></div><span class="sleep-value" id="thuVal">1</span> hrs</div>
+  <div class="sleep-row"><label>Friday:</label><div class="scale-container" data-day="fri"><div class="tracker"></div></div><span class="sleep-value" id="friVal">1</span> hrs</div>
+  <div class="sleep-row"><label>Saturday:</label><div class="scale-container" data-day="sat"><div class="tracker"></div></div><span class="sleep-value" id="satVal">1</span> hrs</div>
+  <div class="sleep-row"><label>Sunday:</label><div class="scale-container" data-day="sun"><div class="tracker"></div></div><span class="sleep-value" id="sunVal">1</span> hrs</div>
+</div>
+
+<p><strong>Ideal Sleep Hours per Night:</strong> <span id="idealHours">--</span> hours</p>
+
+<button onclick="calculateSleepDebt()">Submit & Calculate</button>
+
+<div class="result" id="result"></div>
+<div id="zoneMessage"></div>
+
+<!-- CHART -->
+<canvas id="sleepChart" style="margin-top: 30px;"></canvas>
+
+<script>
+  // Tracker logic
+  const min = 1, max = 9;
+  const trackers = document.querySelectorAll(".scale-container");
+
+  trackers.forEach(container => {
+    const tracker = container.querySelector(".tracker");
+    const day = container.getAttribute("data-day");
+    const output = document.getElementById(day + "Val");
+    let dragging = false;
+
+    tracker.addEventListener("mousedown", () => dragging = true);
+    document.addEventListener("mouseup", () => dragging = false);
+
+    document.addEventListener("mousemove", e => {
+      if (!dragging) return;
+      const rect = container.getBoundingClientRect();
+      let offsetX = e.clientX - rect.left;
+      if (offsetX < 0) offsetX = 0;
+      if (offsetX > rect.width) offsetX = rect.width;
+
+      tracker.style.left = `${(offsetX / rect.width) * 100}%`;
+      const ratio = offsetX / rect.width;
+      const hours = Math.round(min + ratio * (max - min));
+      output.textContent = hours;
+    });
+  });
+
+  function getIdealSleep(ageGroup) {
+    switch (ageGroup) {
+      case "child": return 9;
+      case "teen": return 8;
+      case "adult": return 7;
+      default: return null;
+    }
+  }
+
+  let sleepChart = null;
+
+  function renderChart(sleepValues) {
+    const ctx = document.getElementById("sleepChart");
+
+    if (sleepChart !== null) sleepChart.destroy();
+
+    sleepChart = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        datasets: [{
+          label: "Hours Slept",
+          data: sleepValues,
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: {
+            beginAtZero: true,
+            suggestedMax: 10,
+            title: {
+              display: true,
+              text: "Hours Slept"
+            }
+          }
+        }
+      }
+    });
+  }
+
+  function calculateSleepDebt() {
+    const participant = document.getElementById('participant').value.trim();
+    const ageGroup = document.getElementById('ageGroup').value;
+    const ideal = getIdealSleep(ageGroup);
+
+    if (!participant) {
+      alert("Please enter your name before submitting.");
+      return;
+    }
+    if (!ideal) {
+      alert("Please select your age group.");
+      return;
+    }
+
+    document.getElementById('idealHours').textContent = ideal;
+
+    let totalDebt = 0;
+    let totalSleep = 0;
+    const days = ['mon','tue','wed','thu','fri','sat','sun'];
+
+    for (let i = 0; i < days.length; i++) {
+      const slept = parseFloat(document.getElementById(days[i] + "Val").textContent) || 0;
+      totalSleep += slept;
+      const debt = ideal - slept;
+      if (debt > 0) totalDebt += debt;
+    }
+
+    const resultDiv = document.getElementById('result');
+    resultDiv.innerHTML = `<strong>${participant}</strong>, your total sleep debt for the past week is <strong>${totalDebt.toFixed(1)} hours</strong>.`;
+
+    if (totalDebt > 0) {
+      const recovery = (totalDebt / days.length).toFixed(1);
+      resultDiv.innerHTML += `<br>Suggested extra sleep per night to recover: <strong>${recovery} hours</strong>.`;
+    } else {
+      resultDiv.innerHTML += `<br>Great! You're keeping up with your ideal sleep.`;
+    }
+
+    const zoneDiv = document.getElementById('zoneMessage');
+    zoneDiv.className = "zone-message";
+
+    if (totalSleep < 29) {
+      zoneDiv.classList.add("red-zone");
+      zoneDiv.textContent = "Very little sleep — high risk of sleep deprivation.";
+    } else if (totalSleep >= 30 && totalSleep <= 48) {
+      zoneDiv.classList.add("yellow-zone");
+      zoneDiv.textContent = "Some rest, but still below recommended levels.";
+    } else {
+      zoneDiv.classList.add("green-zone");
+      zoneDiv.textContent = "Healthy sleep range. Good job!";
+    }
+
+    // Chart values
+    const sleepValues = days.map(day =>
+      parseFloat(document.getElementById(day + "Val").textContent) || 0
+    );
+
+    renderChart(sleepValues);
+  }
+</script>
+
+</body>
+</html>
+
+
